@@ -1,4 +1,4 @@
-"""Geometria labiryntu i zasady gry, niezależne od interfejsu."""
+"""Maze geometry and game rules, independent of the interface."""
 
 from math import hypot
 
@@ -17,7 +17,7 @@ FINISH = POINTS[-1]
 
 
 def corridor_rectangles(inset=0):
-    """Prostokąty korytarzy; inset uwzględnia szerokość mazaka."""
+    """Return corridor rectangles; inset accounts for the marker width."""
     half_width = CORRIDOR_HALF_WIDTH - inset
     return tuple(
         (
@@ -31,7 +31,7 @@ def corridor_rectangles(inset=0):
 
 
 def segment_interval(start, end, rect):
-    """Przedział odcinka leżący w prostokącie, w parametrach od 0 do 1."""
+    """Return the segment interval inside the rectangle, parameterized from 0 to 1."""
     lower, upper = 0.0, 1.0
     for origin, delta, minimum, maximum in (
         (start[0], end[0] - start[0], rect[0], rect[2]),

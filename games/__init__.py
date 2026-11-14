@@ -1,1 +1,1 @@
-"""Minigry dostępne w aplikacji."""
+"""Minigames available in the application."""

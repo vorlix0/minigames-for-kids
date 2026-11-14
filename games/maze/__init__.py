@@ -1,1 +1,1 @@
-"""Gra w przechodzenie labiryntu."""
+"""Maze game."""

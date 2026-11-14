@@ -12,18 +12,18 @@ from .logic import (
 
 
 COLORS = {
-    "Czerwony": "#e53935",
-    "Niebieski": "#1e88e5",
-    "Zielony": "#43a047",
-    "Fioletowy": "#8e24aa",
-    "Pomarańczowy": "#fb8c00",
+    "Red": "#e53935",
+    "Blue": "#1e88e5",
+    "Green": "#43a047",
+    "Purple": "#8e24aa",
+    "Orange": "#fb8c00",
 }
 
 
 class MazeGame(tk.Frame):
     def __init__(self, parent, on_back):
         super().__init__(parent)
-        self.color = tk.StringVar(value="Niebieski")
+        self.color = tk.StringVar(value="Blue")
         self.difficulty = tk.StringVar(value="easy")
         self.message = tk.StringVar()
         self.run = MazeRun()
@@ -32,18 +32,18 @@ class MazeGame(tk.Frame):
         controls = tk.Frame(self)
         controls.pack(fill="x", pady=(0, 8))
         tk.Button(controls, text="← Menu", command=on_back).pack(side="left")
-        tk.Label(controls, text="Kolor mazaka:").pack(side="left", padx=(15, 3))
+        tk.Label(controls, text="Marker color:").pack(side="left", padx=(15, 3))
         tk.OptionMenu(controls, self.color, *COLORS).pack(side="left")
-        tk.Label(controls, text="Poziom:").pack(side="left", padx=(15, 3))
+        tk.Label(controls, text="Difficulty:").pack(side="left", padx=(15, 3))
         tk.Radiobutton(
-            controls, text="Łatwy", variable=self.difficulty, value="easy",
+            controls, text="Easy", variable=self.difficulty, value="easy",
             command=self.restart,
         ).pack(side="left")
         tk.Radiobutton(
-            controls, text="Trudny", variable=self.difficulty, value="hard",
+            controls, text="Hard", variable=self.difficulty, value="hard",
             command=self.restart,
         ).pack(side="left")
-        tk.Button(controls, text="Od nowa", command=self.restart).pack(
+        tk.Button(controls, text="Restart", command=self.restart).pack(
             side="right"
         )
 
@@ -79,10 +79,10 @@ class MazeGame(tk.Frame):
         )
         self.canvas.create_text(
             FINISH[0], FINISH[1] - CORRIDOR_HALF_WIDTH - 10,
-            text="META", fill="white", font=("Arial", 11, "bold"),
+            text="GOAL", fill="white", font=("Arial", 11, "bold"),
         )
         self.show_marker()
-        self.message.set("Kliknij mazak na starcie i prowadź go do mety.")
+        self.message.set("Click the marker at the start and guide it to the goal.")
 
     def show_marker(self):
         self.canvas.delete("marker")
@@ -112,7 +112,7 @@ class MazeGame(tk.Frame):
         result = self.run.move((x, y))
         if result == "reset":
             self.restart()
-            self.message.set("Ups! Mazak wyszedł poza ścieżkę. Spróbuj jeszcze raz!")
+            self.message.set("Oops! The marker left the path. Try again!")
             return
         self.canvas.create_line(
             *previous, *self.run.position, fill=COLORS[self.color.get()],
@@ -121,4 +121,4 @@ class MazeGame(tk.Frame):
         self.show_marker()
         if result == "won":
             self.dragging = False
-            self.message.set("Brawo! Udało Ci się dotrzeć do mety!")
+            self.message.set("Great job! You reached the goal!")
