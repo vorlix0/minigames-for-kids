@@ -1,36 +1,35 @@
-# Minigry dla dzieci
+# Minigames for Kids
 
-Zbiór prostych minigier w Pythonie. Pierwszą grą jest labirynt.
+A collection of simple minigames written in Python. The first game is a maze.
 
-## Uruchomienie
+## Getting Started
 
-Potrzebny jest Python 3.8 lub nowszy z biblioteką Tkinter. W katalogu
-projektu uruchom:
+Python 3.8 or newer with Tkinter is required. From the project directory, run:
 
 ```powershell
 py main.py
 ```
 
-W systemach, w których Python jest dostępny jako `python3`, można użyć
-`python3 main.py`. Tkinter jest zwykle częścią instalacji Pythona; w niektórych
-dystrybucjach Linuksa wymaga osobnego pakietu.
+On systems where Python is available as `python3`, you can run
+`python3 main.py`. Tkinter is usually included with Python; some Linux
+distributions require installing it separately.
 
-## Labirynt
+## Maze
 
-Wybierz kolor mazaka i poziom, a następnie kliknij mazak na starcie i prowadź
-go do mety, trzymając lewy przycisk myszy. Po puszczeniu przycisku możesz
-kontynuować od końca narysowanej ścieżki.
+Choose a marker color and difficulty, then click the marker at the start and
+guide it to the goal while holding the left mouse button. After releasing the
+button, you can continue from the end of the drawn path.
 
-- **Łatwy:** mazak może wychodzić poza ścieżkę.
-- **Trudny:** wyjście poza ścieżkę powoduje wyczyszczenie rysunku i powrót na start.
+- **Easy:** the marker can leave the path.
+- **Hard:** leaving the path clears the drawing and returns the marker to the start.
 
-Przycisk „Od nowa” rozpoczyna grę ponownie. Zmiana poziomu również zaczyna
-nową grę. Przycisk „Menu” pozwala wrócić do wyboru minigry.
+The **Restart** button starts a new game. Changing the difficulty also starts a
+new game. The **Menu** button returns to the minigame selection screen.
 
-## Rozbudowa i testy
+## Extending and Testing
 
-Każda gra ma własny katalog w `games`; nową grę można dodać do menu w
-`main.py`. Logika labiryntu jest oddzielona od interfejsu Tkintera.
+Each game has its own directory in `games`; new games can be added to the menu
+in `main.py`. The maze logic is separate from the Tkinter interface.
 
 ```powershell
 py -m unittest discover

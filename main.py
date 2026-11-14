@@ -6,7 +6,7 @@ from games.maze.view import MazeGame
 class App:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("Minigry dla dzieci")
+        self.root.title("Minigames for Kids")
         self.root.resizable(False, False)
         self.current_screen = None
         self.show_menu()
@@ -17,11 +17,11 @@ class App:
         self.current_screen = tk.Frame(self.root, padx=50, pady=50)
         self.current_screen.pack()
         tk.Label(
-            self.current_screen, text="Minigry dla dzieci", font=("Arial", 24, "bold")
+            self.current_screen, text="Minigames for Kids", font=("Arial", 24, "bold")
         ).pack(pady=(0, 25))
         tk.Button(
             self.current_screen,
-            text="Labirynt",
+            text="Maze",
             font=("Arial", 18),
             width=18,
             command=self.show_maze,
