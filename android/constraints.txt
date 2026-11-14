@@ -1,0 +1,2 @@
+# python-for-android installs dependencies with host pip, which rejects Android wheels.
+charset-normalizer==3.4.9
