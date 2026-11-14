@@ -44,17 +44,48 @@ Android 7.0 or later; the first build downloads the Android build tools.
 
 ### GitHub releases
 
-Push a tag matching `version` in `android/buildozer.spec` (for example `v0.3`)
-to run the Android release workflow. The APK will be attached to the resulting
-GitHub Release. These are debug builds signed with a temporary key, so installing
-a newer build may require uninstalling the previous one.
+Push a tag matching `version` in `android/buildozer.spec` (for example `v0.4`)
+to run the Android release workflow. The resulting GitHub Release contains a
+debug APK and a signed AAB for Google Play. The debug APK uses a temporary key,
+so installing a newer build may require uninstalling the previous one.
+
+Before creating a release, configure these repository secrets under **Settings >
+Secrets and variables > Actions**:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded upload keystore |
+| `ANDROID_KEY_ALIAS` | Alias of the upload key |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_PASSWORD` | Key password |
+
+Use the existing upload key if the app is already registered with Google Play.
+Otherwise, create a new key outside the repository. The following Windows
+example requires a JDK with `keytool` on `PATH`:
+
+```powershell
+keytool -genkeypair -v -keystore "C:\path\to\upload-key.jks" -alias upload -keyalg RSA -keysize 2048 -validity 10000
+```
+
+The command prompts for passwords and certificate details. To copy the encoded
+keystore for the GitHub secret without printing it:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\upload-key.jks")) | Set-Clipboard
+```
+
+Paste it into `ANDROID_KEYSTORE_BASE64`, then clear the clipboard. Keep the
+keystore and passwords backed up securely outside the repository; do not commit
+or share them. Future Play uploads must use the same upload key unless Google
+Play resets it. Uploading the AAB also requires a Play Console account and
+meeting Google Play's publishing requirements.
 
 After committing and pushing the workflow and app changes, create and push a
 new matching tag:
 
 ```bash
-git tag v0.3
-git push origin v0.3
+git tag v0.4
+git push origin v0.4
 ```
 
 Use a new version and tag for each release.
