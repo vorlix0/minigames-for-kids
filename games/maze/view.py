@@ -1,15 +1,15 @@
+import math
 import random
 import tkinter as tk
 
 from .logic import (
     CORRIDOR_HALF_WIDTH,
-    FINISH,
     GOAL_RADIUS,
-    MARKER_RADIUS,
     POINTS,
-    START,
     MazeRun,
     corridor_rectangles,
+    generate_points,
+    segment_in_corridor,
 )
 
 
@@ -23,12 +23,80 @@ COLORS = {
 
 WORLD_WIDTH = 800
 WORLD_HEIGHT = 610
-SPACE_BG = "#0b0d2a"
-NEBULA = ("#14123f", "#1b1650", "#241a5e")
-PATH_GLOW = "#3a3f9e"
-PATH_EDGE = "#7c83ff"
-PATH_FILL = "#1d2260"
 STAR_COUNT = 140
+EXPLOSION_FRAMES = 16
+RAINBOW_STRIPE_WIDTH = 3.6
+RAINBOW_COLORS = (
+    "#ff1744", "#ff9100", "#ffea00", "#00e676", "#2979ff", "#d500f9",
+)
+# vehicle -> (trail length, taper, ((sideways shift, color, width), ...))
+TRAILS = {
+    "unicorn": (
+        170, 0.5,
+        tuple(
+            ((index - (len(RAINBOW_COLORS) - 1) / 2) * RAINBOW_STRIPE_WIDTH,
+             color, RAINBOW_STRIPE_WIDTH * 1.15)
+            for index, color in enumerate(RAINBOW_COLORS)
+        ),
+    ),
+    "spaceship": (
+        90, 0.9,
+        ((0, "#ff3d00", 12), (0, "#ff9100", 8), (0, "#fff59d", 4)),
+    ),
+}
+
+THEMES = {
+    "Space": {
+        "vehicle": "spaceship",
+        "bg": "#0b0d2a",
+        "nebula": ("#14123f", "#1b1650", "#241a5e"),
+        "sparkles": ("#ffffff", "#cfd8ff", "#fff3b0"),
+        "decor": (
+            (0.88, 0.14, 38, "#ff8a65", "#bf5b3e", "#ffd9c7"),
+            (0.10, 0.88, 26, "#4dd0e1", "#2a8a96", None),
+        ),
+        "path": ("#3a3f9e", "#7c83ff", "#1d2260"),
+        "guide": "#4a52c4",
+        "start": ("#1b5e20", "#66bb6a", "#06260a"),
+        "goal": ("#7a4a00", "#ffb300", "#fff8e1", "★", "#ffe082"),
+        "boom_rings": (
+            (1.0, "#ff7043"), (0.65, "#ffca28"), (0.3, "#fffde7"),
+        ),
+        "boom_particles": ("#ff5722", "#ffc107", "#fff176", "#ffffff"),
+        "crash": "Boom! The spaceship crashed into the wall!",
+        "retry": "Oops! The ship crashed. Try again!",
+    },
+    "Unicorn": {
+        "vehicle": "unicorn",
+        "bg": "#ffe6f3",
+        "nebula": ("#ffd6ec", "#e9d5ff", "#cdeafe"),
+        "sparkles": ("#ffffff", "#ffd54f", "#f8a5d0"),
+        "decor": (
+            (0.88, 0.14, 38, "#fff59d", "#ffd54f", None),
+            (0.10, 0.88, 26, "#f8bbd0", "#f06292", None),
+        ),
+        "path": ("#f8c8e0", "#f48fb1", "#fff8fc"),
+        "guide": "#f3b3d6",
+        "start": ("#689f38", "#c5e1a5", "#1b3a0a"),
+        "goal": ("#ad1457", "#f06292", "#ffffff", "♥", "#ad1457"),
+        "boom_rings": (
+            (1.0, "#f48fb1"), (0.65, "#ffe082"), (0.3, "#ffffff"),
+        ),
+        "boom_particles": ("#ff80ab", "#ffd54f", "#ffffff", "#b388ff"),
+        "crash": "Poof! The unicorn turned into a rainbow!",
+        "retry": "Oops! The unicorn became a rainbow. Try again!",
+    },
+}
+
+
+def blend(color, other, amount):
+    """Mix two #rrggbb colors; amount 0 gives color, 1 gives other."""
+    mixed = []
+    for index in (1, 3, 5):
+        first = int(color[index:index + 2], 16)
+        second = int(other[index:index + 2], 16)
+        mixed.append(round(first + (second - first) * amount))
+    return "#%02x%02x%02x" % tuple(mixed)
 
 
 class MazeGame(tk.Frame):
@@ -37,9 +105,15 @@ class MazeGame(tk.Frame):
         self.root = parent
         self.on_back = on_back
         self.color = tk.StringVar(value="Blue")
+        self.theme_name = tk.StringVar(value="Space")
+        self.heading = 0.0
+        self.facing = 1
+        self.exploding = False
+        self.boom_job = None
         self.difficulty = tk.StringVar(value="easy")
         self.message = tk.StringVar()
         self.run = MazeRun()
+        self.points = POINTS
         self.dragging = False
         self.fullscreen = False
         self.scale = 1.0
@@ -48,18 +122,18 @@ class MazeGame(tk.Frame):
         rng = random.Random(7)
         self.stars = [
             (rng.random(), rng.random(), rng.choice((1, 1, 2, 3)),
-             rng.choice(("#ffffff", "#cfd8ff", "#fff3b0")))
+             rng.randrange(3))
             for _ in range(STAR_COUNT)
-        ]
-        self.planets = [
-            (0.88, 0.14, 38, "#ff8a65", "#bf5b3e"),
-            (0.10, 0.88, 26, "#4dd0e1", "#2a8a96"),
         ]
 
         controls = tk.Frame(self)
         controls.pack(fill="x", pady=(0, 8))
         tk.Button(controls, text="← Menu", command=on_back).pack(side="left")
-        tk.Label(controls, text="Marker color:").pack(side="left", padx=(15, 3))
+        tk.Label(controls, text="Theme:").pack(side="left", padx=(15, 3))
+        tk.OptionMenu(
+            controls, self.theme_name, *THEMES, command=lambda _: self.redraw()
+        ).pack(side="left")
+        tk.Label(controls, text="Color:").pack(side="left", padx=(15, 3))
         tk.OptionMenu(controls, self.color, *COLORS).pack(side="left")
         tk.Label(controls, text="Difficulty:").pack(side="left", padx=(15, 3))
         tk.Radiobutton(
@@ -76,9 +150,15 @@ class MazeGame(tk.Frame):
         tk.Button(
             controls, text="⛶ Full screen (F11)", command=self.toggle_fullscreen
         ).pack(side="right", padx=(0, 8))
+        tk.Button(
+            controls, text="🎲 New maze", command=self.new_random_maze
+        ).pack(side="right", padx=(0, 8))
+        tk.Button(
+            controls, text="Classic maze", command=self.classic_maze
+        ).pack(side="right", padx=(0, 8))
 
         self.canvas = tk.Canvas(
-            self, width=WORLD_WIDTH, height=WORLD_HEIGHT, bg=SPACE_BG,
+            self, width=WORLD_WIDTH, height=WORLD_HEIGHT,
             highlightthickness=0,
         )
         self.canvas.pack(fill="both", expand=True)
@@ -93,7 +173,14 @@ class MazeGame(tk.Frame):
         self.root.bind("<Escape>", self.exit_fullscreen)
         self.restart()
 
+    @property
+    def theme(self):
+        return THEMES[self.theme_name.get()]
+
     def destroy(self):
+        if self.boom_job is not None:
+            self.after_cancel(self.boom_job)
+            self.boom_job = None
         self.root.unbind("<F11>")
         self.root.unbind("<Escape>")
         self.set_fullscreen(False)
@@ -143,14 +230,32 @@ class MazeGame(tk.Frame):
         return width, height
 
     def restart(self):
-        self.run = MazeRun(hard=self.difficulty.get() == "hard")
+        if self.boom_job is not None:
+            self.after_cancel(self.boom_job)
+            self.boom_job = None
+        self.exploding = False
+        self.run = MazeRun(
+            hard=self.difficulty.get() == "hard", points=self.points
+        )
         self.dragging = False
         self.trace = []
+        first, second = self.points[0], self.points[1]
+        self.heading = math.atan2(second[1] - first[1], second[0] - first[0])
+        self.facing = 1 if second[0] >= first[0] else -1
         self.redraw()
-        self.message.set("Click the marker at the start and guide it to the goal.")
+        self.message.set("Click the start and guide your ride to the goal.")
+
+    def new_random_maze(self):
+        self.points = generate_points()
+        self.restart()
+
+    def classic_maze(self):
+        self.points = POINTS
+        self.restart()
 
     def draw_background(self, width, height):
-        for index, color in enumerate(NEBULA):
+        theme = self.theme
+        for index, color in enumerate(theme["nebula"]):
             cx = width * (0.25 + 0.3 * index)
             cy = height * (0.3 + 0.25 * (index % 2))
             radius = min(width, height) * (0.55 - 0.1 * index)
@@ -158,14 +263,14 @@ class MazeGame(tk.Frame):
                 cx - radius, cy - radius, cx + radius, cy + radius,
                 fill=color, outline="",
             )
-        for fx, fy, size, color in self.stars:
+        for fx, fy, size, color_index in self.stars:
             x, y = fx * width, fy * height
             self.canvas.create_oval(
                 x - size / 2, y - size / 2, x + size / 2, y + size / 2,
-                fill=color, outline="",
+                fill=theme["sparkles"][color_index], outline="",
             )
         unit = min(width, height) / WORLD_HEIGHT
-        for fx, fy, radius, light, dark in self.planets:
+        for fx, fy, radius, light, dark, ring in theme["decor"]:
             cx, cy, r = fx * width, fy * height, radius * unit
             self.canvas.create_oval(
                 cx - r, cy - r, cx + r, cy + r, fill=dark, outline=""
@@ -174,88 +279,255 @@ class MazeGame(tk.Frame):
                 cx - r, cy - r, cx + r * 0.7, cy + r * 0.7,
                 fill=light, outline="",
             )
-        ring_r = self.planets[0][2] * unit
-        cx, cy = self.planets[0][0] * width, self.planets[0][1] * height
-        self.canvas.create_oval(
-            cx - ring_r * 1.6, cy - ring_r * 0.35,
-            cx + ring_r * 1.6, cy + ring_r * 0.35,
-            outline="#ffd9c7", width=max(1, 2 * unit),
-        )
+            if ring:
+                self.canvas.create_oval(
+                    cx - r * 1.6, cy - r * 0.35, cx + r * 1.6, cy + r * 0.35,
+                    outline=ring, width=max(1, 2 * unit),
+                )
 
     def draw_path(self):
-        for grow, color in ((8, PATH_GLOW), (3, PATH_EDGE), (0, PATH_FILL)):
-            for left, top, right, bottom in corridor_rectangles():
+        glow, edge, fill = self.theme["path"]
+        for grow, color in ((8, glow), (3, edge), (0, fill)):
+            for left, top, right, bottom in corridor_rectangles(points=self.points):
                 x1, y1 = self.to_screen((left - grow, top - grow))
                 x2, y2 = self.to_screen((right + grow, bottom + grow))
                 self.canvas.create_rectangle(
                     x1, y1, x2, y2, fill=color, outline=color
                 )
-        guide = [c for point in POINTS for c in self.to_screen(point)]
+        guide = [c for point in self.points for c in self.to_screen(point)]
         self.canvas.create_line(
-            *guide, fill="#4a52c4", width=max(1, 2 * self.scale),
+            *guide, fill=self.theme["guide"], width=max(1, 2 * self.scale),
             dash=(6, 8), capstyle="round", joinstyle="round",
         )
 
     def draw_start_and_goal(self):
+        theme = self.theme
         s = self.scale
-        x, y = self.to_screen(START)
-        for radius, color in ((30, "#1b5e20"), (25, "#66bb6a")):
+        outer, inner, text_color = theme["start"]
+        x, y = self.to_screen(self.run.start)
+        for radius, color in ((30, outer), (25, inner)):
             self.canvas.create_oval(
                 x - radius * s, y - radius * s, x + radius * s, y + radius * s,
                 fill=color, outline="",
             )
         self.canvas.create_text(
-            x, y, text="START", fill="#06260a",
+            x, y, text="START", fill=text_color,
             font=("Arial", max(7, int(10 * s)), "bold"),
         )
-        fx, fy = self.to_screen(FINISH)
-        for radius, color in ((GOAL_RADIUS + 12, "#7a4a00"), (GOAL_RADIUS + 5, "#ffb300")):
+        goal_outer, goal_inner, glyph_color, glyph, label_color = theme["goal"]
+        fx, fy = self.to_screen(self.run.finish)
+        for radius, color in (
+            (GOAL_RADIUS + 12, goal_outer), (GOAL_RADIUS + 5, goal_inner)
+        ):
             self.canvas.create_oval(
                 fx - radius * s, fy - radius * s, fx + radius * s, fy + radius * s,
                 fill=color, outline="",
             )
         self.canvas.create_text(
-            fx, fy, text="★", fill="#fff8e1",
+            fx, fy, text=glyph, fill=glyph_color,
             font=("Arial", max(10, int(26 * s)), "bold"),
         )
-        gx, gy = self.to_screen((FINISH[0], FINISH[1] - CORRIDOR_HALF_WIDTH - 10))
+        gx, gy = self.to_screen(
+            (self.run.finish[0], self.run.finish[1] - CORRIDOR_HALF_WIDTH - 10)
+        )
         self.canvas.create_text(
-            gx, gy, text="GOAL", fill="#ffe082",
+            gx, gy, text="GOAL", fill=label_color,
             font=("Arial", max(8, int(11 * s)), "bold"),
         )
 
     def redraw(self):
         width, height = self.update_transform()
+        self.canvas.configure(bg=self.theme["bg"])
         self.canvas.delete("all")
         self.draw_background(width, height)
         self.draw_path()
         self.draw_start_and_goal()
-        for previous, current in self.trace:
-            self.draw_trace(previous, current)
+        self.update_trail()
         self.show_marker()
 
-    def draw_trace(self, previous, current):
-        self.canvas.create_line(
-            *self.to_screen(previous), *self.to_screen(current),
-            fill=COLORS[self.color.get()],
-            width=MARKER_RADIUS * 2 * self.scale, capstyle="round",
-            tags="trace",
-        )
+    def update_trail(self):
+        self.canvas.delete("exhaust")
+        length_limit, taper, layers = TRAILS[self.theme["vehicle"]]
+        background = self.theme["path"][2]
+        travelled = 0.0
+        for start, end in reversed(self.trace):
+            length = math.hypot(end[0] - start[0], end[1] - start[1])
+            if length < 0.5:
+                continue
+            used = min(length, length_limit - travelled)
+            if used <= 0:
+                break
+            ux, uy = (end[0] - start[0]) / length, (end[1] - start[1]) / length
+            tail = (end[0] - ux * used, end[1] - uy * used)
+            age = (travelled + used / 2) / length_limit
+            travelled += used
+            fade = age ** 1.5
+            for shift, color, width in layers:
+                dx, dy = -uy * shift, ux * shift
+                self.canvas.create_line(
+                    *self.to_screen((tail[0] + dx, tail[1] + dy)),
+                    *self.to_screen((end[0] + dx, end[1] + dy)),
+                    fill=blend(color, background, fade),
+                    width=max(1.0, width * (1 - taper * age) * self.scale),
+                    capstyle="round", tags="exhaust",
+                )
 
     def show_marker(self):
         self.canvas.delete("marker")
+        if self.exploding:
+            return
         x, y = self.to_screen(self.run.position)
-        r = MARKER_RADIUS * self.scale
-        self.canvas.create_oval(
-            x - 2 * r, y - 2 * r, x + 2 * r, y + 2 * r,
-            outline="#ffffff", tags="marker",
+        if self.theme["vehicle"] == "unicorn":
+            self.show_unicorn(x, y)
+        else:
+            self.show_spaceship(x, y)
+
+    def draw_parts(self, x, y, size, angle, mirror, parts, outline, tag="marker"):
+        cos, sin = math.cos(angle), math.sin(angle)
+        for points, color in parts:
+            coordinates = []
+            for px, py in points:
+                px *= mirror
+                coordinates.extend((
+                    x + (px * cos - py * sin) * size,
+                    y + (px * sin + py * cos) * size,
+                ))
+            self.canvas.create_polygon(
+                coordinates, fill=color, outline=outline, tags=tag
+            )
+
+    def show_spaceship(self, x, y):
+        parts = (
+            ([(-0.6, 0), (-1.5, -0.35), (-1.2, 0), (-1.5, 0.35)], "#ffb300"),
+            ([(-0.2, -0.5), (-1.0, -1.0), (-0.8, -0.2)], "#b0bec5"),
+            ([(-0.2, 0.5), (-1.0, 1.0), (-0.8, 0.2)], "#b0bec5"),
+            ([(1.2, 0), (0.4, -0.5), (-0.8, -0.4), (-0.8, 0.4), (0.4, 0.5)],
+             COLORS[self.color.get()]),
+            ([(0.8, 0), (0.3, -0.25), (0.3, 0.25)], "#b3e5fc"),
         )
-        self.canvas.create_oval(
-            x - r, y - r, x + r, y + r,
-            fill=COLORS[self.color.get()], outline="#ffffff", tags="marker",
+        self.draw_parts(
+            x, y, 16 * self.scale, self.heading, 1, parts, "#ffffff"
         )
 
+    def show_unicorn(self, x, y, shrink=1.0, tag="marker"):
+        if abs(math.cos(self.heading)) > 0.3:
+            self.facing = 1 if math.cos(self.heading) > 0 else -1
+        angle = self.heading if self.facing > 0 else self.heading - math.pi
+        mane = COLORS[self.color.get()]
+        white = "#ffffff"
+        parts = (
+            ([(-0.95, -0.1), (-1.6, -0.55), (-1.5, 0.05), (-1.75, 0.5),
+              (-1.0, 0.3)], mane),
+            ([(-0.8, 0.3), (-0.5, 0.3), (-0.5, 0.95), (-0.8, 0.95)], "#e1bee7"),
+            ([(0.4, 0.3), (0.7, 0.3), (0.7, 0.95), (0.4, 0.95)], "#e1bee7"),
+            ([(-1.0, -0.1), (-0.8, -0.5), (0, -0.6), (0.8, -0.5), (1.0, -0.1),
+              (0.8, 0.4), (0, 0.5), (-0.8, 0.4)], white),
+            ([(0.7, -0.5), (1.05, -1.0), (1.6, -1.0), (1.85, -0.6),
+              (1.5, -0.35), (1.0, -0.1)], white),
+            ([(0.6, -0.55), (0.85, -1.2), (1.15, -1.05), (0.95, -0.35)], mane),
+            ([(1.4, -1.0), (1.58, -1.0), (1.8, -1.8)], "#ffd54f"),
+            ([(1.45, -0.8), (1.6, -0.8), (1.6, -0.65), (1.45, -0.65)], "#4a148c"),
+        )
+        self.draw_parts(
+            x, y, 12 * self.scale * shrink, angle, self.facing, parts,
+            "#ce93d8", tag,
+        )
+
+    def crash_point(self, start, end):
+        low, high = 0.0, 1.0
+        for _ in range(20):
+            middle = (low + high) / 2
+            point = (
+                start[0] + (end[0] - start[0]) * middle,
+                start[1] + (end[1] - start[1]) * middle,
+            )
+            if segment_in_corridor(start, point, self.points):
+                low = middle
+            else:
+                high = middle
+        return (
+            start[0] + (end[0] - start[0]) * low,
+            start[1] + (end[1] - start[1]) * low,
+        )
+
+    def explode(self, crash_world):
+        self.exploding = True
+        self.dragging = False
+        self.canvas.delete("marker")
+        rng = random.Random()
+        particles = [
+            (rng.uniform(0, math.tau), rng.uniform(25, 70),
+             rng.choice(self.theme["boom_particles"]))
+            for _ in range(22)
+        ]
+        self.message.set(self.theme["crash"])
+        self.explosion_step(crash_world, particles, 0)
+
+    def explosion_step(self, crash_world, particles, frame):
+        self.canvas.delete("boom")
+        if frame >= EXPLOSION_FRAMES:
+            self.boom_job = None
+            self.restart()
+            self.message.set(self.theme["retry"])
+            return
+        progress = frame / EXPLOSION_FRAMES
+        x, y = self.to_screen(crash_world)
+        if self.theme["vehicle"] == "unicorn":
+            self.draw_rainbow_poof(x, y, progress, particles)
+        else:
+            self.draw_fireball(x, y, progress, particles)
+        self.boom_job = self.after(
+            40, self.explosion_step, crash_world, particles, frame + 1
+        )
+
+    def draw_rainbow_poof(self, x, y, progress, particles):
+        background = self.theme["path"][2]
+        if progress < 0.6:
+            self.show_unicorn(x, y, 1 - progress / 0.6, "boom")
+        grow = min(1.0, progress / 0.6)
+        fade = max(0.0, (progress - 0.6) / 0.4)
+        stripe = 5 * self.scale
+        for index, color in enumerate(RAINBOW_COLORS):
+            radius = (10 + 48 * grow - index * 5) * self.scale
+            if radius <= stripe / 2:
+                continue
+            self.canvas.create_arc(
+                x - radius, y - radius, x + radius, y + radius,
+                start=0, extent=180, style="arc", width=stripe * 1.2,
+                outline=blend(color, background, fade), tags="boom",
+            )
+        for angle, speed, color in particles:
+            distance = speed * progress * self.scale
+            size = max(1.0, (3 - 2 * progress) * self.scale)
+            px = x + math.cos(angle) * distance
+            py = y + math.sin(angle) * distance
+            self.canvas.create_oval(
+                px - size, py - size, px + size, py + size,
+                fill=color, outline="", tags="boom",
+            )
+
+    def draw_fireball(self, x, y, progress, particles):
+        radius = (14 + 46 * progress) * self.scale
+        if progress < 0.7:
+            for factor, color in self.theme["boom_rings"]:
+                r = radius * factor
+                self.canvas.create_oval(
+                    x - r, y - r, x + r, y + r, fill=color, outline="",
+                    tags="boom",
+                )
+        for angle, speed, color in particles:
+            distance = speed * progress * self.scale
+            size = max(1.0, (4 - 3 * progress) * self.scale)
+            px = x + math.cos(angle) * distance
+            py = y + math.sin(angle) * distance
+            self.canvas.create_oval(
+                px - size, py - size, px + size, py + size,
+                fill=color, outline="", tags="boom",
+            )
+
     def start_drawing(self, event):
+        if self.exploding:
+            return
         if self.run.can_resume(self.to_world(event.x, event.y)):
             self.dragging = True
             self.move_to(event.x, event.y)
@@ -273,12 +545,15 @@ class MazeGame(tk.Frame):
         previous = self.run.position
         result = self.run.move(self.to_world(x, y))
         if result == "reset":
-            self.restart()
-            self.message.set("Oops! The marker left the path. Try again!")
+            self.explode(self.crash_point(previous, self.to_world(x, y)))
             return
+        dx = self.run.position[0] - previous[0]
+        dy = self.run.position[1] - previous[1]
+        if math.hypot(dx, dy) > 1:
+            self.heading = math.atan2(dy, dx)
         self.trace.append((previous, self.run.position))
-        self.draw_trace(previous, self.run.position)
+        self.update_trail()
         self.show_marker()
         if result == "won":
-            self.dragging = False
-            self.message.set("Great job! You reached the goal!")
+            self.new_random_maze()
+            self.message.set("Great job! Here is a new maze - can you finish it too?")

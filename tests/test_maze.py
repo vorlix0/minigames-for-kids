@@ -1,6 +1,15 @@
+import random
 import unittest
 
-from games.maze.logic import FINISH, POINTS, START, MazeRun, segment_in_corridor
+from games.maze.logic import (
+    FINISH,
+    POINTS,
+    START,
+    MazeRun,
+    corridor_rectangles,
+    generate_points,
+    segment_in_corridor,
+)
 
 
 class MazeTests(unittest.TestCase):
@@ -26,6 +35,28 @@ class MazeTests(unittest.TestCase):
         game = MazeRun()
         self.assertEqual(game.move((710, 450)), "moved")
         self.assertEqual(game.move((710, 570)), "won")
+
+    def test_random_mazes_are_solvable_and_stay_on_canvas(self):
+        for seed in range(50):
+            points = generate_points(random.Random(seed))
+            game = MazeRun(hard=True, points=points)
+            for point in points[1:-1]:
+                self.assertEqual(game.move(point), "moved")
+            self.assertEqual(game.move(points[-1]), "won")
+            for left, top, right, bottom in corridor_rectangles(points=points):
+                self.assertGreaterEqual(min(left, top), 0)
+                self.assertLessEqual(right, 800)
+                self.assertLessEqual(bottom, 610)
+
+    def test_random_maze_has_no_shortcuts(self):
+        points = generate_points(random.Random(3))
+        rectangles = corridor_rectangles(points=points)
+        for index, first in enumerate(rectangles):
+            for second in rectangles[index + 2:]:
+                self.assertTrue(
+                    first[2] <= second[0] or second[2] <= first[0]
+                    or first[3] <= second[1] or second[3] <= first[1]
+                )
 
     def test_resume_requires_click_near_current_position(self):
         game = MazeRun()
