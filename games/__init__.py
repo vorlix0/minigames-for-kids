@@ -1,0 +1,1 @@
+"""Minigry dostępne w aplikacji."""
