@@ -30,7 +30,7 @@ class App:
     def show_maze(self) -> None:
         self.current_screen.destroy()
         self.current_screen = MazeGame(self.root, self.show_menu)
-        self.current_screen.pack(padx=12, pady=12)
+        self.current_screen.pack(padx=12, pady=12, fill="both", expand=True)
 
 
 def main() -> None:
