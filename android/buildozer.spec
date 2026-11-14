@@ -12,6 +12,7 @@ android.permissions = VIBRATE
 android.archs = arm64-v8a
 android.api = 36
 android.minapi = 24
+p4a.branch = v2026.05.09
 
 [buildozer]
 log_level = 2
