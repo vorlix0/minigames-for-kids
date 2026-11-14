@@ -42,6 +42,23 @@ bash android/build_apk.sh
 The script prints the APK location. The debug APK targets ARM64 devices with
 Android 7.0 or later; the first build downloads the Android build tools.
 
+### GitHub releases
+
+Push a tag matching `version` in `android/buildozer.spec` (for example `v0.3`)
+to run the Android release workflow. The APK will be attached to the resulting
+GitHub Release. These are debug builds signed with a temporary key, so installing
+a newer build may require uninstalling the previous one.
+
+After committing and pushing the workflow and app changes, create and push a
+new matching tag:
+
+```bash
+git tag v0.3
+git push origin v0.3
+```
+
+Use a new version and tag for each release.
+
 ## Extending and Testing
 
 Each game has its own directory in `games`; new games can be added to the menu

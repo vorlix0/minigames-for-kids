@@ -9,4 +9,14 @@ cp "$repo/games/__init__.py" "$stage/games/"
 cp "$repo/games/maze/"{__init__,logic,themes}.py "$stage/games/maze/"
 cd "$stage"
 PIP_CONSTRAINT="$stage/constraints.txt" buildozer android debug
-echo "APK: $(ls "$stage"/bin/*.apk)"
+shopt -s nullglob
+apks=("$stage"/bin/*.apk)
+if (( ${#apks[@]} != 1 )); then
+    echo "Expected exactly one APK in $stage/bin, found ${#apks[@]}." >&2
+    exit 1
+fi
+if [[ -n "${APK_OUTPUT_DIR:-}" ]]; then
+    mkdir -p "$APK_OUTPUT_DIR"
+    cp "${apks[0]}" "$APK_OUTPUT_DIR/"
+fi
+echo "APK: ${apks[0]}"
