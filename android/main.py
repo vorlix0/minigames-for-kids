@@ -417,7 +417,9 @@ class MazeWidget(Widget):
             return super().on_touch_down(touch)
         touch_local = self.local(touch)
         resume_distance = max(RESUME_DISTANCE, dp(24) / self.scale)
-        if self.run.can_resume(self.to_world(*touch_local), resume_distance):
+        if not self.dragging and self.run.can_resume(
+            self.to_world(*touch_local), resume_distance
+        ):
             self.dragging = True
             marker = self.to_screen(self.run.position)
             self.drag_offset = (
