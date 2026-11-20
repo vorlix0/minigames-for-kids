@@ -138,10 +138,10 @@ class MazeRun:
         self.position = self.start
         self.won = False
 
-    def can_resume(self, point):
+    def can_resume(self, point, distance=RESUME_DISTANCE):
         return not self.won and hypot(
             point[0] - self.position[0], point[1] - self.position[1]
-        ) <= RESUME_DISTANCE
+        ) <= distance
 
     def move(self, point):
         if self.won:

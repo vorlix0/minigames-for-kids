@@ -28,6 +28,7 @@ from games.maze.logic import (
     CORRIDOR_HALF_WIDTH,
     GOAL_RADIUS,
     POINTS,
+    RESUME_DISTANCE,
     MazeRun,
     corridor_rectangles,
     generate_points,
@@ -68,6 +69,7 @@ class MazeWidget(Widget):
         self.heading = 0.0
         self.facing = 1
         self.dragging = False
+        self.drag_offset = (0.0, 0.0)
         self.explosion = None
         self.crash = None
         self.scale = 1.0
@@ -413,16 +415,22 @@ class MazeWidget(Widget):
     def on_touch_down(self, touch):
         if not self.collide_point(*touch.pos) or self.explosion is not None:
             return super().on_touch_down(touch)
-        if self.run.can_resume(self.to_world(*self.local(touch))):
+        touch_local = self.local(touch)
+        resume_distance = max(RESUME_DISTANCE, dp(24) / self.scale)
+        if self.run.can_resume(self.to_world(*touch_local), resume_distance):
             self.dragging = True
+            marker = self.to_screen(self.run.position)
+            self.drag_offset = (
+                touch_local[0] - marker[0],
+                touch_local[1] - marker[1],
+            )
             touch.grab(self)
-            self.move_to(*self.local(touch))
             return True
         return False
 
     def on_touch_move(self, touch):
         if touch.grab_current is self and self.dragging:
-            self.move_to(*self.local(touch))
+            self.move_to(*self.drag_target(touch))
             return True
         return False
 
@@ -430,10 +438,14 @@ class MazeWidget(Widget):
         if touch.grab_current is self:
             touch.ungrab(self)
             if self.dragging:
-                self.move_to(*self.local(touch))
+                self.move_to(*self.drag_target(touch))
             self.dragging = False
             return True
         return False
+
+    def drag_target(self, touch):
+        sx, sy = self.local(touch)
+        return sx - self.drag_offset[0], sy - self.drag_offset[1]
 
     def move_to(self, sx, sy):
         previous = self.run.position

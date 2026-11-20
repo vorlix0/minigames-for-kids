@@ -66,6 +66,11 @@ class MazeTests(unittest.TestCase):
         game.move(FINISH)
         self.assertFalse(game.can_resume(FINISH))
 
+    def test_resume_allows_a_larger_touch_target_when_requested(self):
+        game = MazeRun()
+        self.assertFalse(game.can_resume((126, 95)))
+        self.assertTrue(game.can_resume((126, 95), distance=31))
+
 
 if __name__ == "__main__":
     unittest.main()
