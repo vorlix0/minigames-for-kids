@@ -57,7 +57,7 @@ jobs:
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$P4A_RELEASE_KEYALIAS" || -z "$P4A_RELEASE_KEYSTORE_PASSWD" || -z "$P4A_RELEASE_KEYALIAS_PASSWD" ]]; then
-            echo "::warning::One or more Android signing secrets are missing; releasing the debug APK only."
+            echo "::warning::One or more Android signing secrets are missing; releasing an unsigned AAB."
             echo "enabled=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -67,34 +67,23 @@ jobs:
             -storepass:env P4A_RELEASE_KEYSTORE_PASSWD -alias "$P4A_RELEASE_KEYALIAS" > /dev/null
           echo "enabled=1" >> "$GITHUB_OUTPUT"
 
-      - name: Build APK and signed AAB
+      - name: Build AAB
         env:
-          APK_OUTPUT_DIR: ${{ runner.temp }}/maze-apk
           AAB_OUTPUT_DIR: ${{ runner.temp }}/maze-aab
-          BUILD_RELEASE_AAB: ${{ steps.signing.outputs.enabled }}
-          P4A_RELEASE_KEYSTORE: ${{ runner.temp }}/android-upload-key
+          BUILD_DEBUG_APK: '0'
+          BUILD_RELEASE_AAB: '1'
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: bash android/build_apk.sh
-
-      - name: Verify APK
-        shell: bash
         run: |
-          shopt -s nullglob
-          apks=("$RUNNER_TEMP"/maze-apk/*.apk)
-          if (( ${#apks[@]} != 1 )); then
-            echo "Expected exactly one APK, found ${#apks[@]}." >&2
-            exit 1
+          if [[ "${{ steps.signing.outputs.enabled }}" == 1 ]]; then
+            export P4A_RELEASE_KEYSTORE="$RUNNER_TEMP/android-upload-key"
+          else
+            unset P4A_RELEASE_KEYSTORE P4A_RELEASE_KEYALIAS P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS_PASSWD
           fi
-          tools="$HOME/.buildozer/android/platform/android-sdk/build-tools"
-          aapt="$(find "$tools" -name aapt -type f | sort -V | tail -n 1)"
-          signer="$(dirname "$aapt")/apksigner"
-          "$aapt" dump badging "${apks[0]}" | grep -Fx "targetSdkVersion:'36'"
-          "$signer" verify "${apks[0]}"
+          bash android/build_apk.sh
 
-      - name: Verify signed AAB
-        if: steps.signing.outputs.enabled == '1'
+      - name: Verify AAB
         env:
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -105,8 +94,10 @@ jobs:
             echo "Expected exactly one AAB, found ${#bundles[@]}." >&2
             exit 1
           fi
-          jarsigner -verify -strict -keystore "$RUNNER_TEMP/android-upload-key" \
-            -storepass:env P4A_RELEASE_KEYSTORE_PASSWD "${bundles[0]}" "$P4A_RELEASE_KEYALIAS"
+          if [[ "${{ steps.signing.outputs.enabled }}" == 1 ]]; then
+            jarsigner -verify -strict -keystore "$RUNNER_TEMP/android-upload-key" \
+              -storepass:env P4A_RELEASE_KEYSTORE_PASSWD "${bundles[0]}" "$P4A_RELEASE_KEYALIAS"
+          fi
           curl -fsSL --retry 3 https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o "$RUNNER_TEMP/bundletool.jar"
           echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum --check
           java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle="${bundles[0]}"
@@ -122,11 +113,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          assets=("$RUNNER_TEMP"/maze-apk/*.apk)
-          notes="The APK is a debug build and may require uninstalling an older build."
+          shopt -s nullglob
+          assets=("$RUNNER_TEMP"/maze-aab/*.aab)
+          if (( ${#assets[@]} != 1 )); then
+            echo "Expected exactly one AAB, found ${#assets[@]}." >&2
+            exit 1
+          fi
           if [[ "${{ steps.signing.outputs.enabled }}" == 1 ]]; then
-            assets+=("$RUNNER_TEMP"/maze-aab/*.aab)
-            notes="$notes The signed AAB is intended for Google Play."
+            notes="The AAB is signed with the configured Android upload key. It is not uploaded to Google Play by this workflow."
+          else
+            notes="The AAB is unsigned and must be signed with your Android upload key before uploading to Google Play."
           fi
           gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
             --verify-tag \
