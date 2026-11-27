@@ -28,7 +28,7 @@ new game. The **Menu** button returns to the minigame selection screen.
 
 ## Android
 
-Build a debug APK in Ubuntu or WSL with the Android SDK license accepted:
+Build a debug APK and release AAB in Ubuntu or WSL with the Android SDK license accepted:
 
 ```bash
 sudo apt update
@@ -39,15 +39,19 @@ pip install buildozer cython==0.29.37 setuptools wheel
 bash android/build_apk.sh
 ```
 
-The script prints the APK location. The debug APK targets ARM64 devices with
-Android 7.0 or later; the first build downloads the Android build tools.
+The script prints both output locations. The AAB is unsigned unless the
+`P4A_RELEASE_KEYSTORE`, `P4A_RELEASE_KEYALIAS`, `P4A_RELEASE_KEYSTORE_PASSWD`,
+and `P4A_RELEASE_KEYALIAS_PASSWD` environment variables are configured.
+Set `BUILD_RELEASE_AAB=0` to build only the APK, or `BUILD_DEBUG_APK=0` to
+build only the AAB. Both target ARM64 devices with Android 7.0 or later; the
+first build downloads the Android build tools.
 
 ### GitHub releases
 
 Push a tag matching `version` in `android/buildozer.spec` (for example `v0.6`)
-to run the Android release workflow. The resulting GitHub Release contains an
-AAB, signed when all signing secrets are available and unsigned otherwise. The
-workflow does not upload to Google Play.
+to run the Android release workflow. The resulting GitHub Release contains a
+debug APK and an AAB, signed when all signing secrets are available and unsigned
+otherwise. The workflow does not upload to Google Play.
 
 To sign the AAB, configure all these repository secrets under **Settings >
 Secrets and variables > Actions**. If any are missing, the workflow warns and

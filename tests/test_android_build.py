@@ -49,6 +49,26 @@ class AndroidBuildTests(unittest.TestCase):
             env=self.env, text=True, capture_output=True,
         )
 
+    def test_builds_both_formats_by_default(self):
+        self.env.pop("BUILD_DEBUG_APK")
+        self.env.pop("BUILD_RELEASE_AAB")
+        self.env["APK_OUTPUT_DIR"] = str(self.root / "output")
+        result = self.run_build()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "calls").read_text(), "android debug\nandroid release\n")
+        self.assertTrue((self.root / "output/app.apk").exists())
+        self.assertTrue((self.root / "output/app.aab").exists())
+
+    def test_can_build_only_apk(self):
+        self.env["BUILD_DEBUG_APK"] = "1"
+        self.env["BUILD_RELEASE_AAB"] = "0"
+        self.env["APK_OUTPUT_DIR"] = str(self.root / "output")
+        result = self.run_build()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "calls").read_text(), "android debug\n")
+        self.assertTrue((self.root / "output/app.apk").exists())
+        self.assertFalse((self.root / "output/app.aab").exists())
+
     def test_unsigned_release_unsets_empty_signing_variables(self):
         self.env.update({name: "" for name in SIGNING_VARS})
         result = self.run_build()

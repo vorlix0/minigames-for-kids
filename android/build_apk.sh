@@ -3,7 +3,7 @@
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 signing_vars=(P4A_RELEASE_KEYSTORE P4A_RELEASE_KEYALIAS P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS_PASSWD)
-if [[ "${BUILD_RELEASE_AAB:-0}" == 1 ]]; then
+if [[ "${BUILD_RELEASE_AAB:-1}" == 1 ]]; then
     has_signing=0
     for name in "${signing_vars[@]}"; do
         if [[ -n "${!name:-}" ]]; then
@@ -47,7 +47,7 @@ if [[ "${BUILD_DEBUG_APK:-1}" == 1 ]]; then
     echo "APK: ${apks[0]}"
 fi
 
-if [[ "${BUILD_RELEASE_AAB:-0}" == 1 ]]; then
+if [[ "${BUILD_RELEASE_AAB:-1}" == 1 ]]; then
     PIP_CONSTRAINT="$stage/constraints.txt" buildozer android release
     bundles=("$stage"/bin/*.aab)
     if (( ${#bundles[@]} != 1 )); then
