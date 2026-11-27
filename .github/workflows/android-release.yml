@@ -49,26 +49,29 @@ jobs:
           cp "$ANDROID_HOME/licenses/android-sdk-license" "$sdk/licenses/"
 
       - name: Prepare upload key
+        id: signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          : "${ANDROID_KEYSTORE_BASE64:?Missing ANDROID_KEYSTORE_BASE64 secret}"
-          : "${P4A_RELEASE_KEYALIAS:?Missing ANDROID_KEY_ALIAS secret}"
-          : "${P4A_RELEASE_KEYSTORE_PASSWD:?Missing ANDROID_KEYSTORE_PASSWORD secret}"
-          : "${P4A_RELEASE_KEYALIAS_PASSWD:?Missing ANDROID_KEY_PASSWORD secret}"
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$P4A_RELEASE_KEYALIAS" || -z "$P4A_RELEASE_KEYSTORE_PASSWD" || -z "$P4A_RELEASE_KEYALIAS_PASSWD" ]]; then
+            echo "::warning::One or more Android signing secrets are missing; releasing the debug APK only."
+            echo "enabled=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-upload-key"
           keytool -list -keystore "$RUNNER_TEMP/android-upload-key" \
             -storepass:env P4A_RELEASE_KEYSTORE_PASSWD -alias "$P4A_RELEASE_KEYALIAS" > /dev/null
+          echo "enabled=1" >> "$GITHUB_OUTPUT"
 
       - name: Build APK and signed AAB
         env:
           APK_OUTPUT_DIR: ${{ runner.temp }}/maze-apk
           AAB_OUTPUT_DIR: ${{ runner.temp }}/maze-aab
-          BUILD_RELEASE_AAB: '1'
+          BUILD_RELEASE_AAB: ${{ steps.signing.outputs.enabled }}
           P4A_RELEASE_KEYSTORE: ${{ runner.temp }}/android-upload-key
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -91,6 +94,7 @@ jobs:
           "$signer" verify "${apks[0]}"
 
       - name: Verify signed AAB
+        if: steps.signing.outputs.enabled == '1'
         env:
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -118,11 +122,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP"/maze-apk/*.apk "$RUNNER_TEMP"/maze-aab/*.aab \
+          assets=("$RUNNER_TEMP"/maze-apk/*.apk)
+          notes="The APK is a debug build and may require uninstalling an older build."
+          if [[ "${{ steps.signing.outputs.enabled }}" == 1 ]]; then
+            assets+=("$RUNNER_TEMP"/maze-aab/*.aab)
+            notes="$notes The signed AAB is intended for Google Play."
+          fi
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "The APK is a debug build and may require uninstalling an older build. The signed AAB is intended for Google Play."
+            --notes "$notes"
 
       - name: Remove upload key
         if: always()
