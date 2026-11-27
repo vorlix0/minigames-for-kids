@@ -45,14 +45,14 @@ Android 7.0 or later; the first build downloads the Android build tools.
 ### GitHub releases
 
 Push a tag matching `version` in `android/buildozer.spec` (for example `v0.4`)
-to run the Android release workflow. The resulting GitHub Release always contains
-a debug APK and, when all signing secrets are available, a signed AAB for Google
-Play. The debug APK uses a temporary key, so installing a newer build may require
-uninstalling the previous one.
+to run the Android release workflow. The resulting GitHub Release contains an
+AAB, signed when all signing secrets are available and unsigned otherwise. The
+workflow does not upload to Google Play.
 
-To include the AAB, configure all these repository secrets under **Settings >
+To sign the AAB, configure all these repository secrets under **Settings >
 Secrets and variables > Actions**. If any are missing, the workflow warns and
-releases only the APK. Invalid signing credentials still fail the build.
+releases an unsigned AAB, which must be signed before uploading to Google Play.
+Invalid signing credentials still fail the build.
 
 | Secret | Value |
 | --- | --- |
