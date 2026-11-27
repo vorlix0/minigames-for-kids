@@ -67,10 +67,11 @@ jobs:
             -storepass:env P4A_RELEASE_KEYSTORE_PASSWD -alias "$P4A_RELEASE_KEYALIAS" > /dev/null
           echo "enabled=1" >> "$GITHUB_OUTPUT"
 
-      - name: Build AAB
+      - name: Build APK and AAB
         env:
+          APK_OUTPUT_DIR: ${{ runner.temp }}/maze-apk
           AAB_OUTPUT_DIR: ${{ runner.temp }}/maze-aab
-          BUILD_DEBUG_APK: '0'
+          BUILD_DEBUG_APK: '1'
           BUILD_RELEASE_AAB: '1'
           P4A_RELEASE_KEYALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -114,9 +115,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          assets=("$RUNNER_TEMP"/maze-aab/*.aab)
-          if (( ${#assets[@]} != 1 )); then
-            echo "Expected exactly one AAB, found ${#assets[@]}." >&2
+          apks=("$RUNNER_TEMP"/maze-apk/*.apk)
+          bundles=("$RUNNER_TEMP"/maze-aab/*.aab)
+          if (( ${#apks[@]} != 1 || ${#bundles[@]} != 1 )); then
+            echo "Expected exactly one APK and one AAB, found ${#apks[@]} APKs and ${#bundles[@]} AABs." >&2
             exit 1
           fi
           if [[ "${{ steps.signing.outputs.enabled }}" == 1 ]]; then
@@ -124,7 +126,7 @@ jobs:
           else
             notes="The AAB is unsigned and must be signed with your Android upload key before uploading to Google Play."
           fi
-          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+          gh release create "$GITHUB_REF_NAME" "${apks[@]}" "${bundles[@]}" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
