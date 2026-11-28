@@ -3,6 +3,8 @@
 from math import hypot
 import random
 
+from .themes import WORLD_HEIGHT, WORLD_WIDTH
+
 
 POINTS = (
     (95, 95), (325, 95), (325, 205), (175, 205), (175, 340),
@@ -22,6 +24,15 @@ GRID_ROWS = 5
 GRID_X0, GRID_Y0 = 60, 55
 GRID_STEP_X, GRID_STEP_Y = 130, 120
 MIN_CELLS = 16
+MOVE_STEP = 8
+
+
+def direction_target(position, direction):
+    """Move one control step without leaving the visible world."""
+    return (
+        max(0, min(WORLD_WIDTH, position[0] + direction[0] * MOVE_STEP)),
+        max(0, min(WORLD_HEIGHT, position[1] + direction[1] * MOVE_STEP)),
+    )
 
 
 def generate_points(rng=None):
@@ -127,8 +138,7 @@ def segment_in_corridor(start, end, points=POINTS):
 
 
 class MazeRun:
-    def __init__(self, hard=False, points=POINTS):
-        self.hard = hard
+    def __init__(self, points=POINTS):
         self.points = points
         self.start = points[0]
         self.finish = points[-1]
@@ -160,9 +170,7 @@ class MazeRun:
                 self.position[1] + (point[1] - self.position[1]) * t,
             )
 
-        if self.hard and not segment_in_corridor(
-            self.position, destination, self.points
-        ):
+        if not segment_in_corridor(self.position, destination, self.points):
             self.reset()
             return "reset"
         self.position = destination

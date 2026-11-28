@@ -16,15 +16,16 @@ distributions require installing it separately.
 
 ## Maze
 
-Choose a marker color and difficulty, then click the marker at the start and
-guide it to the goal while holding the left mouse button. After releasing the
-button, you can continue from the end of the drawn path.
+Select **Maze** from the game menu, choose a theme and marker color, then press
+**Start**. Use the arrow buttons to guide your ride to the goal. Hold an arrow
+to keep moving, or use the keyboard arrow keys.
+The controls start in the bottom right; use **Controls: right** to move them to
+the left, and **Controls: left** to move them back.
 
-- **Easy:** the marker can leave the path.
-- **Hard:** leaving the path clears the drawing and returns the marker to the start.
+Leaving the path returns the marker to the start.
 
-The **Restart** button starts a new game. Changing the difficulty also starts a
-new game. The **Menu** button returns to the minigame selection screen.
+The **Restart** button restarts the current maze. **Options** returns to the
+maze settings, where **Back** returns to the minigame selection screen.
 
 ## Android
 
