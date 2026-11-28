@@ -49,7 +49,7 @@ first build downloads the Android build tools.
 
 ### GitHub releases
 
-Push a tag matching `version` in `android/buildozer.spec` (for example `v0.6`)
+Push a tag matching `version` in `android/buildozer.spec` (for example `v0.7`)
 to run the Android release workflow. The resulting GitHub Release contains a
 debug APK and an AAB, signed when all signing secrets are available and unsigned
 otherwise. The workflow does not upload to Google Play.
@@ -91,8 +91,8 @@ After committing and pushing the workflow and app changes, create and push a
 new matching tag:
 
 ```bash
-git tag v0.6
-git push origin v0.6
+git tag v0.7
+git push origin v0.7
 ```
 
 Use a new version and tag for each release.
