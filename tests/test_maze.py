@@ -7,21 +7,34 @@ from games.maze.logic import (
     START,
     MazeRun,
     corridor_rectangles,
+    direction_target,
     generate_points,
     segment_in_corridor,
 )
 
 
 class MazeTests(unittest.TestCase):
-    def test_entire_route_is_valid_in_hard_mode(self):
-        game = MazeRun(hard=True)
+    def test_arrow_steps_follow_world_coordinates_and_stay_visible(self):
+        self.assertEqual(direction_target((100, 100), (0, -1)), (100, 92))
+        self.assertEqual(direction_target((100, 100), (1, 0)), (108, 100))
+        self.assertEqual(direction_target((0, 0), (-1, 0)), (0, 0))
+        self.assertEqual(direction_target((800, 610), (0, 1)), (800, 610))
+
+    def test_arrow_step_detects_wall_collision(self):
+        game = MazeRun()
+        game.move((130, 130))
+        self.assertEqual(game.move(direction_target(game.position, (0, 1))), "reset")
+        self.assertEqual(game.position, START)
+
+    def test_entire_route_is_valid(self):
+        game = MazeRun()
         for point in POINTS[1:-1]:
             self.assertEqual(game.move(point), "moved")
         self.assertEqual(game.move(FINISH), "won")
         self.assertTrue(game.won)
 
-    def test_hard_mode_detects_crossing_wall_between_mouse_events(self):
-        game = MazeRun(hard=True)
+    def test_crossing_wall_resets_run(self):
+        game = MazeRun()
         self.assertEqual(game.move((325, 95)), "moved")
         self.assertEqual(game.move((325, 340)), "reset")
         self.assertEqual(game.position, START)
@@ -31,15 +44,16 @@ class MazeTests(unittest.TestCase):
         self.assertTrue(segment_in_corridor(START, (150, 130)))
         self.assertFalse(segment_in_corridor(START, (150, 131)))
 
-    def test_easy_mode_allows_leaving_and_crossing_goal(self):
+    def test_crossing_goal_wins(self):
         game = MazeRun()
-        self.assertEqual(game.move((710, 450)), "moved")
-        self.assertEqual(game.move((710, 570)), "won")
+        for point in POINTS[1:-1]:
+            self.assertEqual(game.move(point), "moved")
+        self.assertEqual(game.move((750, 535)), "won")
 
     def test_random_mazes_are_solvable_and_stay_on_canvas(self):
         for seed in range(50):
             points = generate_points(random.Random(seed))
-            game = MazeRun(hard=True, points=points)
+            game = MazeRun(points=points)
             for point in points[1:-1]:
                 self.assertEqual(game.move(point), "moved")
             self.assertEqual(game.move(points[-1]), "won")
@@ -63,7 +77,8 @@ class MazeTests(unittest.TestCase):
         game.move((200, 95))
         self.assertFalse(game.can_resume(START))
         self.assertTrue(game.can_resume((205, 95)))
-        game.move(FINISH)
+        for point in POINTS[1:]:
+            game.move(point)
         self.assertFalse(game.can_resume(FINISH))
 
     def test_resume_allows_a_larger_touch_target_when_requested(self):

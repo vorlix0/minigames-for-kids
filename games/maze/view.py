@@ -8,6 +8,7 @@ from .logic import (
     POINTS,
     MazeRun,
     corridor_rectangles,
+    direction_target,
     generate_points,
     segment_in_corridor,
 )
@@ -29,21 +30,21 @@ from .themes import (
 
 
 class MazeGame(tk.Frame):
-    def __init__(self, parent, on_back):
+    def __init__(self, parent, on_back, theme="Space", color="Blue"):
         super().__init__(parent)
         self.root = parent
         self.on_back = on_back
-        self.color = tk.StringVar(value="Blue")
-        self.theme_name = tk.StringVar(value="Space")
+        self.color = tk.StringVar(value=color)
+        self.theme_name = tk.StringVar(value=theme)
         self.heading = 0.0
         self.facing = 1
         self.exploding = False
         self.boom_job = None
-        self.difficulty = tk.StringVar(value="easy")
         self.message = tk.StringVar()
         self.run = MazeRun()
         self.points = POINTS
-        self.dragging = False
+        self.move_job = None
+        self.direction = None
         self.fullscreen = False
         self.scale = 1.0
         self.offset = (0.0, 0.0)
@@ -57,22 +58,7 @@ class MazeGame(tk.Frame):
 
         controls = tk.Frame(self)
         controls.pack(fill="x", pady=(0, 8))
-        tk.Button(controls, text="← Menu", command=on_back).pack(side="left")
-        tk.Label(controls, text="Theme:").pack(side="left", padx=(15, 3))
-        tk.OptionMenu(
-            controls, self.theme_name, *THEMES, command=lambda _: self.redraw()
-        ).pack(side="left")
-        tk.Label(controls, text="Color:").pack(side="left", padx=(15, 3))
-        tk.OptionMenu(controls, self.color, *COLORS).pack(side="left")
-        tk.Label(controls, text="Difficulty:").pack(side="left", padx=(15, 3))
-        tk.Radiobutton(
-            controls, text="Easy", variable=self.difficulty, value="easy",
-            command=self.restart,
-        ).pack(side="left")
-        tk.Radiobutton(
-            controls, text="Hard", variable=self.difficulty, value="hard",
-            command=self.restart,
-        ).pack(side="left")
+        tk.Button(controls, text="← Options", command=on_back).pack(side="left")
         tk.Button(controls, text="Restart", command=self.restart).pack(
             side="right"
         )
@@ -91,15 +77,35 @@ class MazeGame(tk.Frame):
             highlightthickness=0,
         )
         self.canvas.pack(fill="both", expand=True)
-        tk.Label(self, textvariable=self.message, font=("Arial", 12)).pack(
-            pady=(8, 0)
+        footer = tk.Frame(self)
+        footer.pack(fill="x", pady=(8, 0))
+        self.direction_controls = tk.Frame(footer)
+        self.direction_controls.pack(side="right")
+        for text, row, column, direction in (
+            ("↑", 0, 1, (0, -1)), ("←", 1, 0, (-1, 0)),
+            ("↓", 1, 1, (0, 1)), ("→", 1, 2, (1, 0)),
+        ):
+            button = tk.Button(self.direction_controls, text=text, width=4, height=2)
+            button.grid(row=row, column=column)
+            button.bind("<ButtonPress-1>", lambda _, d=direction: self.start_move(d))
+            button.bind("<ButtonRelease-1>", lambda _, d=direction: self.stop_move(d))
+        self.side_button = tk.Button(
+            footer, text="Controls: right", command=self.toggle_controls_side
         )
-        self.canvas.bind("<ButtonPress-1>", self.start_drawing)
-        self.canvas.bind("<B1-Motion>", self.draw)
-        self.canvas.bind("<ButtonRelease-1>", self.stop_drawing)
+        self.side_button.pack(side="bottom")
+        tk.Label(footer, textvariable=self.message, font=("Arial", 12)).pack(
+            side="bottom", fill="x"
+        )
         self.canvas.bind("<Configure>", lambda event: self.redraw())
         self.root.bind("<F11>", self.toggle_fullscreen)
         self.root.bind("<Escape>", self.exit_fullscreen)
+        self.root.bind("<FocusOut>", lambda _: self.stop_move())
+        for key, direction in (
+            ("Up", (0, -1)), ("Left", (-1, 0)),
+            ("Down", (0, 1)), ("Right", (1, 0)),
+        ):
+            self.root.bind(f"<KeyPress-{key}>", lambda _, d=direction: self.start_move(d))
+            self.root.bind(f"<KeyRelease-{key}>", lambda _, d=direction: self.stop_move(d))
         self.restart()
 
     @property
@@ -107,11 +113,16 @@ class MazeGame(tk.Frame):
         return THEMES[self.theme_name.get()]
 
     def destroy(self):
+        self.stop_move()
         if self.boom_job is not None:
             self.after_cancel(self.boom_job)
             self.boom_job = None
         self.root.unbind("<F11>")
         self.root.unbind("<Escape>")
+        self.root.unbind("<FocusOut>")
+        for key in ("Up", "Left", "Down", "Right"):
+            self.root.unbind(f"<KeyPress-{key}>")
+            self.root.unbind(f"<KeyRelease-{key}>")
         self.set_fullscreen(False)
         super().destroy()
 
@@ -159,20 +170,49 @@ class MazeGame(tk.Frame):
         return width, height
 
     def restart(self):
+        self.stop_move()
         if self.boom_job is not None:
             self.after_cancel(self.boom_job)
             self.boom_job = None
         self.exploding = False
-        self.run = MazeRun(
-            hard=self.difficulty.get() == "hard", points=self.points
-        )
-        self.dragging = False
+        self.run = MazeRun(points=self.points)
         self.trace = []
         first, second = self.points[0], self.points[1]
         self.heading = math.atan2(second[1] - first[1], second[0] - first[0])
         self.facing = 1 if second[0] >= first[0] else -1
         self.redraw()
-        self.message.set("Click the start and guide your ride to the goal.")
+        self.message.set("")
+
+    def toggle_controls_side(self):
+        self.stop_move()
+        side = "left" if self.side_button["text"] == "Controls: right" else "right"
+        self.direction_controls.pack_forget()
+        self.direction_controls.pack(side=side, before=self.side_button)
+        self.side_button.configure(text=f"Controls: {side}")
+
+    def start_move(self, direction):
+        if self.exploding or self.direction == direction:
+            return
+        self.stop_move()
+        self.direction = direction
+        self.move_step()
+
+    def stop_move(self, direction=None):
+        if direction is not None and direction != self.direction:
+            return
+        self.direction = None
+        if self.move_job is not None:
+            self.after_cancel(self.move_job)
+            self.move_job = None
+
+    def move_step(self):
+        self.move_job = None
+        if self.direction is None or self.exploding:
+            return
+        target = direction_target(self.run.position, self.direction)
+        self.move_to(*self.to_screen(target))
+        if self.direction is not None and not self.exploding:
+            self.move_job = self.after(50, self.move_step)
 
     def new_random_maze(self):
         self.points = generate_points()
@@ -358,8 +398,8 @@ class MazeGame(tk.Frame):
         )
 
     def explode(self, crash_world):
+        self.stop_move()
         self.exploding = True
-        self.dragging = False
         self.canvas.delete("marker")
         rng = random.Random()
         particles = [
@@ -431,22 +471,6 @@ class MazeGame(tk.Frame):
                 px - size, py - size, px + size, py + size,
                 fill=color, outline="", tags="boom",
             )
-
-    def start_drawing(self, event):
-        if self.exploding:
-            return
-        if self.run.can_resume(self.to_world(event.x, event.y)):
-            self.dragging = True
-            self.move_to(event.x, event.y)
-
-    def draw(self, event):
-        if self.dragging:
-            self.move_to(event.x, event.y)
-
-    def stop_drawing(self, event):
-        if self.dragging:
-            self.move_to(event.x, event.y)
-        self.dragging = False
 
     def move_to(self, x, y):
         previous = self.run.position
